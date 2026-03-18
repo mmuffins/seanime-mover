@@ -42,6 +42,13 @@ jobs:
         mkdir -p test-results
         python -m pytest tests -v --junitxml=test-results/junit.xml
         
+    - name: Publish Unit Test Results
+      uses: dorny/test-reporter@v2
+      with:
+        name: Unit Test Results
+        path: test-results/junit.xml
+        reporter: python-xunit
+
     - name: Upload test results
       uses: actions/upload-artifact@v4
       with:
