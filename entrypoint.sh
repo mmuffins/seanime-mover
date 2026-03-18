@@ -3,15 +3,15 @@
 set -eu
 
 if [ -n "${PGID:-}" ]; then
-    groupmod -o -g "${PGID}" app
+    groupmod -o -g "${PGID}" seanime
 fi
 
 if [ -n "${PUID:-}" ]; then
-    usermod -o -u "${PUID}" app
+    usermod -o -u "${PUID}" seanime
 fi
 
 if [ -n "${PUID:-}" ] || [ -n "${PGID:-}" ]; then
-    exec gosu app "$@"
+    exec gosu seanime "$@"
 fi
 
 exec "$@"
