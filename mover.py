@@ -56,9 +56,11 @@ def configure_logging(log_dir: Path = LOG_DIR) -> logging.Logger:
         encoding="utf-8",
     )
     file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.INFO)
 
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
+    stream_handler.setLevel(logging.DEBUG)
 
     logger.addHandler(file_handler)
     logger.addHandler(stream_handler)
@@ -165,7 +167,7 @@ def scan_once(
             stats.moved,
         ]
     ):
-        logger.info(
+        logger.debug(
             "Scan summary: moved=%d skipped_zero_byte=%d skipped_too_recent=%d "
             "skipped_tmp_dirs=%d collisions=%d errors=%d",
             stats.moved,

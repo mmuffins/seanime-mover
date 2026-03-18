@@ -13,6 +13,10 @@ The script supports configuration through environment variables. If a variable i
 | `READY_AGE_SECONDS` | `60` | Minimum file age before a file is considered ready to move. |
 | `LOG_RETENTION_DAYS` | `30` | Number of daily log files to retain. |
 | `CLEAN_QUEUE_INTERVAL_SECONDS` | `86400` | Delay between `clean_queue()` runs. |
+| `PUID` | unset | If set, the container process runs as this user ID instead of root. |
+| `PGID` | unset | If set, the container process runs with this group ID instead of root. |
+
+When `PUID` and `PGID` are set, files created in mounted volumes are owned by that UID/GID. If they are not set, the container keeps the previous default behavior and runs as root.
 
 ## Tests
 Run the unit tests locally with:
