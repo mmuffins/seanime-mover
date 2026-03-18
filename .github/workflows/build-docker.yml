@@ -49,54 +49,9 @@ jobs:
         path: test-results/junit.xml
         reporter: python-xunit
 
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: test-results/junit.xml
-
     - name: Fail job if tests failed
       if: steps.run_tests.outcome == 'failure'
       run: exit 1
-      
-    # - name: Run pytest
-    #   id: run_tests
-    #   run: |
-    #     set +e
-    #     python -m pytest -v --junitxml=pytest-results.xml 2>&1 | tee test-results.txt
-    #     test_exit_code=${PIPESTATUS[0]}
-    #     echo "exit_code=${test_exit_code}" >> "$GITHUB_OUTPUT"
-    #     exit 0
-
-    # - name: Publish test summary
-    #   run: |
-    #     {
-    #       echo "## Pytest results"
-    #       echo
-    #       echo "- Command: \`python -m pytest -v --junitxml=pytest-results.xml\`"
-    #       echo "- Exit code: \`${{ steps.run_tests.outputs.exit_code }}\`"
-    #       echo
-    #       echo "<details><summary>Test output</summary>"
-    #       echo
-    #       echo '```text'
-    #       cat test-results.txt
-    #       echo '```'
-    #       echo
-    #       echo "</details>"
-    #     } >> "$GITHUB_STEP_SUMMARY"
-
-    # - name: Upload test results
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: test-results
-    #     path: |
-    #       test-results.txt
-    #       pytest-results.xml
-    #     if-no-files-found: error
-
-    # - name: Fail if tests failed
-    #   if: steps.run_tests.outputs.exit_code != '0'
-    #   run: exit 1
 
   release:
     if: ${{ github.event_name != 'pull_request'  && github.ref_name == 'main' }}
