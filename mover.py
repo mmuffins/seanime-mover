@@ -10,14 +10,19 @@ from dataclasses import dataclass
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
-SOURCE_DIR = Path("/source")
-DEST_DIR = Path("/dest")
-LOG_DIR = Path("/logs")
+
+def get_env_int(name: str, default: int) -> int:
+    return int(os.getenv(name, str(default)))
+
+
+SOURCE_DIR = Path(os.getenv("SOURCE_DIR", "/source"))
+DEST_DIR = Path(os.getenv("DEST_DIR", "/dest"))
+LOG_DIR = Path(os.getenv("LOG_DIR", "/config"))
 LOG_FILE = LOG_DIR / "mover.log"
-SCAN_INTERVAL_SECONDS = 60
-READY_AGE_SECONDS = 60
-LOG_RETENTION_DAYS = 30
-CLEAN_QUEUE_INTERVAL_SECONDS = 24 * 60 * 60
+SCAN_INTERVAL_SECONDS = get_env_int("SCAN_INTERVAL_SECONDS", 60)
+READY_AGE_SECONDS = get_env_int("READY_AGE_SECONDS", 60)
+LOG_RETENTION_DAYS = get_env_int("LOG_RETENTION_DAYS", 30)
+CLEAN_QUEUE_INTERVAL_SECONDS = get_env_int("CLEAN_QUEUE_INTERVAL_SECONDS", 24 * 60 * 60)
 
 
 @dataclass
