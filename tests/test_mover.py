@@ -1,124 +1,134 @@
 import io
 import logging
-import tempfile
+import os
 import time
-import unittest
-from contextlib import redirect_stdout
 from pathlib import Path
+
+import pytest
 
 from mover import READY_AGE_SECONDS, clean_queue, scan_once
 
 
-class TestMover(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp_dir.name)
-        self.source = self.root / "source"
-        self.dest = self.root / "dest"
-        self.source.mkdir()
-        self.dest.mkdir()
-        self.log_stream = io.StringIO()
-        self.logger = logging.getLogger(f"test_mover_{id(self)}")
-        self.logger.handlers.clear()
-        self.logger.setLevel(logging.INFO)
-        self.logger.propagate = False
-        handler = logging.StreamHandler(self.log_stream)
-        handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
-        self.logger.addHandler(handler)
+@pytest.fixture
+def mover_env(tmp_path: Path):
+    source = tmp_path / "source"
+    dest = tmp_path / "dest"
+    source.mkdir()
+    dest.mkdir()
 
-    def tearDown(self) -> None:
-        self.temp_dir.cleanup()
+    log_stream = io.StringIO()
+    logger = logging.getLogger(f"test_mover_{tmp_path.name}")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
-    def _write_file(self, relative_path: str, content: bytes, age_seconds: int = READY_AGE_SECONDS + 5) -> Path:
-        path = self.source / relative_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(content)
-        file_time = time.time() - age_seconds
-        path.touch()
-        path_time = (file_time, file_time)
-        path.parent.touch()
-        import os
+    handler = logging.StreamHandler(log_stream)
+    handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
+    logger.addHandler(handler)
 
-        os.utime(path, path_time)
-        return path
+    yield {
+        "source": source,
+        "dest": dest,
+        "logger": logger,
+        "log_stream": log_stream,
+    }
 
-    def test_moves_nested_file_and_creates_placeholder(self) -> None:
-        source_path = self._write_file("a/b/example.txt", b"payload")
-
-        stats = scan_once(self.source, self.dest, self.logger, now=time.time())
-
-        self.assertEqual(stats.moved, 1)
-        self.assertTrue((self.dest / "example.txt").exists())
-        self.assertEqual((self.dest / "example.txt").read_bytes(), b"payload")
-        self.assertTrue(source_path.exists())
-        self.assertEqual(source_path.stat().st_size, 0)
-
-    def test_flattens_source_structure(self) -> None:
-        self._write_file("one/two/three/data.bin", b"abc")
-
-        scan_once(self.source, self.dest, self.logger, now=time.time())
-
-        self.assertTrue((self.dest / "data.bin").exists())
-        self.assertFalse((self.dest / "one").exists())
-
-    def test_skips_zero_byte_files(self) -> None:
-        placeholder = self._write_file("nested/placeholder.txt", b"")
-
-        stats = scan_once(self.source, self.dest, self.logger, now=time.time())
-
-        self.assertEqual(stats.skipped_zero_byte, 1)
-        self.assertFalse((self.dest / "placeholder.txt").exists())
-        self.assertEqual(placeholder.stat().st_size, 0)
-
-    def test_skips_tmp_directories(self) -> None:
-        tmp_file = self._write_file("a/.tmp123/deeper/file.txt", b"payload")
-
-        stats = scan_once(self.source, self.dest, self.logger, now=time.time())
-
-        self.assertEqual(stats.skipped_tmp_dirs, 1)
-        self.assertTrue(tmp_file.exists())
-        self.assertFalse((self.dest / "file.txt").exists())
-
-    def test_skips_recent_files(self) -> None:
-        recent_file = self._write_file("recent/file.txt", b"payload", age_seconds=5)
-
-        stats = scan_once(self.source, self.dest, self.logger, now=time.time())
-
-        self.assertEqual(stats.skipped_too_recent, 1)
-        self.assertTrue(recent_file.exists())
-        self.assertFalse((self.dest / "file.txt").exists())
-
-    def test_collision_logs_error_and_leaves_source_untouched(self) -> None:
-        source_path = self._write_file("a/b/shared.txt", b"source-data")
-        (self.dest / "shared.txt").write_bytes(b"dest-data")
-
-        stats = scan_once(self.source, self.dest, self.logger, now=time.time())
-
-        self.assertEqual(stats.collisions, 1)
-        self.assertEqual(source_path.read_bytes(), b"source-data")
-        self.assertEqual((self.dest / "shared.txt").read_bytes(), b"dest-data")
-        self.assertIn("Destination collision", self.log_stream.getvalue())
-
-    def test_placeholder_is_not_moved_again(self) -> None:
-        source_path = self._write_file("a/b/repeat.txt", b"payload")
-
-        first_stats = scan_once(self.source, self.dest, self.logger, now=time.time())
-        second_stats = scan_once(self.source, self.dest, self.logger, now=time.time() + READY_AGE_SECONDS + 5)
-
-        self.assertEqual(first_stats.moved, 1)
-        self.assertEqual(second_stats.moved, 0)
-        self.assertEqual(second_stats.skipped_zero_byte, 1)
-        self.assertEqual(source_path.stat().st_size, 0)
-        self.assertEqual((self.dest / "repeat.txt").read_bytes(), b"payload")
-
-    def test_clean_queue_prints_marker(self) -> None:
-        stdout = io.StringIO()
-
-        with redirect_stdout(stdout):
-            clean_queue()
-
-        self.assertEqual(stdout.getvalue(), "clean_queue\n")
+    logger.handlers.clear()
 
 
-if __name__ == "__main__":
-    unittest.main()
+def write_file(source: Path, relative_path: str, content: bytes, age_seconds: int = READY_AGE_SECONDS + 5) -> Path:
+    path = source / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    file_time = time.time() - age_seconds
+    path.touch()
+    os.utime(path, (file_time, file_time))
+    return path
+
+
+def test_moves_nested_file_and_creates_placeholder(mover_env) -> None:
+    source_path = write_file(mover_env["source"], "a/b/example.txt", b"payload")
+
+    stats = scan_once(mover_env["source"], mover_env["dest"], mover_env["logger"], now=time.time())
+
+    assert stats.moved == 1
+    assert (mover_env["dest"] / "example.txt").exists()
+    assert (mover_env["dest"] / "example.txt").read_bytes() == b"payload"
+    assert source_path.exists()
+    assert source_path.stat().st_size == 0
+
+
+def test_flattens_source_structure(mover_env) -> None:
+    write_file(mover_env["source"], "one/two/three/data.bin", b"abc")
+
+    scan_once(mover_env["source"], mover_env["dest"], mover_env["logger"], now=time.time())
+
+    assert (mover_env["dest"] / "data.bin").exists()
+    assert not (mover_env["dest"] / "one").exists()
+
+
+def test_skips_zero_byte_files(mover_env) -> None:
+    placeholder = write_file(mover_env["source"], "nested/placeholder.txt", b"")
+
+    stats = scan_once(mover_env["source"], mover_env["dest"], mover_env["logger"], now=time.time())
+
+    assert stats.skipped_zero_byte == 1
+    assert not (mover_env["dest"] / "placeholder.txt").exists()
+    assert placeholder.stat().st_size == 0
+
+
+def test_skips_tmp_directories(mover_env) -> None:
+    tmp_file = write_file(mover_env["source"], "a/.tmp123/deeper/file.txt", b"payload")
+
+    stats = scan_once(mover_env["source"], mover_env["dest"], mover_env["logger"], now=time.time())
+
+    assert stats.skipped_tmp_dirs == 1
+    assert tmp_file.exists()
+    assert not (mover_env["dest"] / "file.txt").exists()
+
+
+def test_skips_recent_files(mover_env) -> None:
+    recent_file = write_file(mover_env["source"], "recent/file.txt", b"payload", age_seconds=5)
+
+    stats = scan_once(mover_env["source"], mover_env["dest"], mover_env["logger"], now=time.time())
+
+    assert stats.skipped_too_recent == 1
+    assert recent_file.exists()
+    assert not (mover_env["dest"] / "file.txt").exists()
+
+
+def test_collision_logs_error_and_leaves_source_untouched(mover_env) -> None:
+    source_path = write_file(mover_env["source"], "a/b/shared.txt", b"source-data")
+    (mover_env["dest"] / "shared.txt").write_bytes(b"dest-data")
+
+    stats = scan_once(mover_env["source"], mover_env["dest"], mover_env["logger"], now=time.time())
+
+    assert stats.collisions == 1
+    assert source_path.read_bytes() == b"source-data"
+    assert (mover_env["dest"] / "shared.txt").read_bytes() == b"dest-data"
+    assert "Destination collision" in mover_env["log_stream"].getvalue()
+
+
+def test_placeholder_is_not_moved_again(mover_env) -> None:
+    source_path = write_file(mover_env["source"], "a/b/repeat.txt", b"payload")
+
+    first_stats = scan_once(mover_env["source"], mover_env["dest"], mover_env["logger"], now=time.time())
+    second_stats = scan_once(
+        mover_env["source"],
+        mover_env["dest"],
+        mover_env["logger"],
+        now=time.time() + READY_AGE_SECONDS + 5,
+    )
+
+    assert first_stats.moved == 1
+    assert second_stats.moved == 0
+    assert second_stats.skipped_zero_byte == 1
+    assert source_path.stat().st_size == 0
+    assert (mover_env["dest"] / "repeat.txt").read_bytes() == b"payload"
+
+
+def test_clean_queue_prints_marker(capsys: pytest.CaptureFixture[str]) -> None:
+    clean_queue()
+
+    captured = capsys.readouterr()
+    assert captured.out == "clean_queue\n"

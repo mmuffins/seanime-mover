@@ -34,38 +34,57 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
+        
     - name: Run unit tests
       id: run_tests
+      continue-on-error: true
       run: |
-        set +e
-        python -m unittest discover -s tests -v 2>&1 | tee test-results.txt
-        test_exit_code=${PIPESTATUS[0]}
-        echo "exit_code=${test_exit_code}" >> "$GITHUB_OUTPUT"
-        exit 0
+        mkdir -p test-results
+        pytest tests -v --junitxml=test-results/junit.xml
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: test-results/
 
-    - name: Publish test summary
-      run: |
-        {
-          echo "## Unit test results"
-          echo
-          echo "- Command: \`python -m unittest discover -s tests -v\`"
-          echo "- Exit code: \`${{ steps.run_tests.outputs.exit_code }}\`"
-          echo
-          echo "<details><summary>Test output</summary>"
-          echo
-          echo '```text'
-          cat test-results.txt
-          echo '```'
-          echo
-          echo "</details>"
-        } >> "$GITHUB_STEP_SUMMARY"
+    - name: Fail job if tests failed
+      if: steps.run_tests.outcome == 'failure'
+      run: exit 1
+      
+    # - name: Run pytest
+    #   id: run_tests
+    #   run: |
+    #     set +e
+    #     python -m pytest -v --junitxml=pytest-results.xml 2>&1 | tee test-results.txt
+    #     test_exit_code=${PIPESTATUS[0]}
+    #     echo "exit_code=${test_exit_code}" >> "$GITHUB_OUTPUT"
+    #     exit 0
+
+    # - name: Publish test summary
+    #   run: |
+    #     {
+    #       echo "## Pytest results"
+    #       echo
+    #       echo "- Command: \`python -m pytest -v --junitxml=pytest-results.xml\`"
+    #       echo "- Exit code: \`${{ steps.run_tests.outputs.exit_code }}\`"
+    #       echo
+    #       echo "<details><summary>Test output</summary>"
+    #       echo
+    #       echo '```text'
+    #       cat test-results.txt
+    #       echo '```'
+    #       echo
+    #       echo "</details>"
+    #     } >> "$GITHUB_STEP_SUMMARY"
 
     # - name: Upload test results
     #   uses: actions/upload-artifact@v4
     #   with:
     #     name: test-results
-    #     path: test-results.txt
+    #     path: |
+    #       test-results.txt
+    #       pytest-results.xml
     #     if-no-files-found: error
 
     # - name: Fail if tests failed
