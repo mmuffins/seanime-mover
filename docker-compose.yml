@@ -1,0 +1,10 @@
+services:
+  mover:
+    build:
+      context: .
+    container_name: seanime-mover
+    restart: unless-stopped
+    volumes:
+      - ./source:/source
+      - ./dest:/dest
+      - ./config:/config

@@ -12,7 +12,7 @@ from pathlib import Path
 
 SOURCE_DIR = Path("/source")
 DEST_DIR = Path("/dest")
-LOG_DIR = Path("/logs")
+LOG_DIR = Path("/config")
 LOG_FILE = LOG_DIR / "mover.log"
 SCAN_INTERVAL_SECONDS = 60
 READY_AGE_SECONDS = 60
