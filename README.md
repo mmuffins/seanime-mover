@@ -1,6 +1,19 @@
 # seanime-mover
 Python service for personal use that scans `/source` every 60 seconds, moves eligible files into `/dest`, and leaves a zero-byte placeholder behind at the original path.
 
+## Configuration
+The script supports configuration through environment variables. If a variable is not set, the default value below is used.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SOURCE_DIR` | `/source` | Root directory that is scanned recursively for files to move. |
+| `DEST_DIR` | `/dest` | Flat destination directory where eligible files are moved. |
+| `LOG_DIR` | `/config` | Directory where log files are written. |
+| `SCAN_INTERVAL_SECONDS` | `60` | Delay between scan cycles. |
+| `READY_AGE_SECONDS` | `60` | Minimum file age before a file is considered ready to move. |
+| `LOG_RETENTION_DAYS` | `30` | Number of daily log files to retain. |
+| `CLEAN_QUEUE_INTERVAL_SECONDS` | `86400` | Delay between `clean_queue()` runs. |
+
 ## Tests
 Run the unit tests locally with:
 ```powershell
