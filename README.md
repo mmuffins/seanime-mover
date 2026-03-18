@@ -1,18 +1,6 @@
 # seanime-mover
 Python service for personal use that scans `/source` every 60 seconds, moves eligible files into `/dest`, and leaves a zero-byte placeholder behind at the original path.
 
-
-## Run
-```bash
-docker compose up -d --build
-```
-
-Create nested folders under `./source` and place files there. The container mounts:
-
-- `./source` to `/source`
-- `./dest` to `/dest`
-- `./logs` to `/logs`
-
 ## Tests
 Run the unit tests locally with:
 ```powershell
