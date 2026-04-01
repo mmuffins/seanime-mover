@@ -43,7 +43,7 @@ jobs:
         python -m pytest tests -v --junitxml=test-results/junit.xml
         
     - name: Publish Unit Test Results
-      uses: dorny/test-reporter@v2
+      uses: dorny/test-reporter@v3
       with:
         name: Unit Test Results
         path: test-results/junit.xml
