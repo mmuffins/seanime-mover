@@ -22,13 +22,14 @@ LOG_FILE = LOG_DIR / "mover.log"
 SCAN_INTERVAL_SECONDS = get_env_int("SCAN_INTERVAL_SECONDS", 60)
 READY_AGE_SECONDS = get_env_int("READY_AGE_SECONDS", 60)
 LOG_RETENTION_DAYS = get_env_int("LOG_RETENTION_DAYS", 30)
+MIN_FILE_SIZE_BYTES = max(0, get_env_int("MIN_FILE_SIZE_BYTES", 0))
 CLEAN_QUEUE_INTERVAL_SECONDS = get_env_int("CLEAN_QUEUE_INTERVAL_SECONDS", 24 * 60 * 60)
 
 
 @dataclass
 class ScanStats:
     moved: int = 0
-    skipped_zero_byte: int = 0
+    skipped_too_small: int = 0
     skipped_too_recent: int = 0
     skipped_tmp_dirs: int = 0
     collisions: int = 0
@@ -81,8 +82,8 @@ def should_skip_file(source_root: Path, file_path: Path, now: float) -> str | No
     except FileNotFoundError:
         return "missing"
 
-    if stat_result.st_size == 0:
-        return "zero-byte"
+    if stat_result.st_size <= MIN_FILE_SIZE_BYTES:
+        return "too-small"
 
     if now - stat_result.st_mtime < READY_AGE_SECONDS:
         return "too-recent"
@@ -142,8 +143,8 @@ def scan_once(
             if skip_reason == "tmp":
                 stats.skipped_tmp_dirs += 1
                 continue
-            if skip_reason == "zero-byte":
-                stats.skipped_zero_byte += 1
+            if skip_reason == "too-small":
+                stats.skipped_too_small += 1
                 continue
             if skip_reason == "too-recent":
                 stats.skipped_too_recent += 1
@@ -159,7 +160,7 @@ def scan_once(
 
     if any(
         [
-            stats.skipped_zero_byte,
+            stats.skipped_too_small,
             stats.skipped_too_recent,
             stats.skipped_tmp_dirs,
             stats.collisions,
@@ -168,10 +169,10 @@ def scan_once(
         ]
     ):
         logger.debug(
-            "Scan summary: moved=%d skipped_zero_byte=%d skipped_too_recent=%d "
+            "Scan summary: moved=%d skipped_too_small=%d skipped_too_recent=%d "
             "skipped_tmp_dirs=%d collisions=%d errors=%d",
             stats.moved,
-            stats.skipped_zero_byte,
+            stats.skipped_too_small,
             stats.skipped_too_recent,
             stats.skipped_tmp_dirs,
             stats.collisions,
@@ -200,12 +201,14 @@ def run_forever() -> None:
     signal.signal(signal.SIGINT, handle_signal)
 
     logger.info(
-        "Starting mover with source=%s dest=%s logs=%s scan_interval=%ss ready_age=%ss retention_days=%s",
+        "Starting mover with source=%s dest=%s logs=%s scan_interval=%ss ready_age=%ss "
+        "min_file_size_bytes=%s retention_days=%s",
         SOURCE_DIR,
         DEST_DIR,
         LOG_DIR,
         SCAN_INTERVAL_SECONDS,
         READY_AGE_SECONDS,
+        MIN_FILE_SIZE_BYTES,
         LOG_RETENTION_DAYS,
     )
 

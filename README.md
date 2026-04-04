@@ -11,6 +11,7 @@ The script supports configuration through environment variables. If a variable i
 | `LOG_DIR` | `/config` | Directory where log files are written. |
 | `SCAN_INTERVAL_SECONDS` | `60` | Delay between scan cycles. |
 | `READY_AGE_SECONDS` | `60` | Minimum file age before a file is considered ready to move. |
+| `MIN_FILE_SIZE_BYTES` | `0` | Files at or below this size are skipped. |
 | `LOG_RETENTION_DAYS` | `30` | Number of daily log files to retain. |
 | `CLEAN_QUEUE_INTERVAL_SECONDS` | `86400` | Delay between `clean_queue()` runs. |
 | `PUID` | unset | If set, the container process runs as this user ID instead of root. |
