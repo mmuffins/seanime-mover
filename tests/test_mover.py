@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import mover
 from mover import READY_AGE_SECONDS, clean_queue, scan_once
 
 
@@ -72,9 +73,22 @@ def test_skips_zero_byte_files(mover_env) -> None:
 
     stats = scan_once(mover_env["source"], mover_env["dest"], mover_env["logger"], now=time.time())
 
-    assert stats.skipped_zero_byte == 1
+    assert stats.skipped_too_small == 1
     assert not (mover_env["dest"] / "placeholder.txt").exists()
     assert placeholder.stat().st_size == 0
+
+
+def test_skips_files_at_or_below_minimum_size(mover_env, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(mover, "MIN_FILE_SIZE_BYTES", 1)
+    small_file = write_file(mover_env["source"], "nested/small.txt", b"a")
+    large_file = write_file(mover_env["source"], "nested/large.txt", b"ab")
+
+    stats = scan_once(mover_env["source"], mover_env["dest"], mover_env["logger"], now=time.time())
+
+    assert stats.skipped_too_small == 1
+    assert small_file.exists()
+    assert small_file.read_bytes() == b"a"
+    assert (mover_env["dest"] / "large.txt").read_bytes() == b"ab"
 
 
 def test_skips_tmp_directories(mover_env) -> None:
@@ -122,7 +136,7 @@ def test_placeholder_is_not_moved_again(mover_env) -> None:
 
     assert first_stats.moved == 1
     assert second_stats.moved == 0
-    assert second_stats.skipped_zero_byte == 1
+    assert second_stats.skipped_too_small == 1
     assert source_path.stat().st_size == 0
     assert (mover_env["dest"] / "repeat.txt").read_bytes() == b"payload"
 
