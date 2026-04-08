@@ -15,7 +15,6 @@ The script supports configuration through environment variables. If a variable i
 | `LOG_RETENTION_DAYS` | `30` | Number of daily log files to retain. |
 | `CLEAN_QUEUE_INTERVAL_SECONDS` | `86400` | Delay between `clean_queue()` runs. |
 | `DOWNLOADER_API_KEY` | `REPLACE_ME` | API key used by the daily queue cleanup task. |
-| `DOWNLOADER_API_VERSION` | `v1` | API version used by the current provider adapter. |
 | `DOWNLOADER_QUEUE_MAX_AGE_DAYS` | `60` | Download items older than this threshold are deleted during queue cleanup. |
 | `PUID` | unset | If set, the container process runs as this user ID instead of root. |
 | `PGID` | unset | If set, the container process runs with this group ID instead of root. |
@@ -33,7 +32,6 @@ The scheduled cleanup survives container restarts. The mover stores the last suc
 | Variable | Default | Description |
 | --- | --- | --- |
 | `DOWNLOADER_API_KEY` | `REPLACE_ME` | API key used by the shared queue cleanup logic. |
-| `DOWNLOADER_API_VERSION` | `v1` | API version used by the current provider adapter. |
 | `DOWNLOADER_QUEUE_MAX_AGE_DAYS` | `60` | Download items older than this threshold are deleted. |
 
 ### Manual Queue Cleanup Test
