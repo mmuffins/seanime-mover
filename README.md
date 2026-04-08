@@ -14,10 +14,46 @@ The script supports configuration through environment variables. If a variable i
 | `MIN_FILE_SIZE_BYTES` | `0` | Files at or below this size are skipped. |
 | `LOG_RETENTION_DAYS` | `30` | Number of daily log files to retain. |
 | `CLEAN_QUEUE_INTERVAL_SECONDS` | `86400` | Delay between `clean_queue()` runs. |
+| `DOWNLOADER_API_KEY` | `REPLACE_ME` | API key used by the daily queue cleanup task. |
+| `DOWNLOADER_API_VERSION` | `v1` | API version used by the current provider adapter. |
+| `DOWNLOADER_QUEUE_MAX_AGE_DAYS` | `60` | Download items older than this threshold are deleted during queue cleanup. |
 | `PUID` | unset | If set, the container process runs as this user ID instead of root. |
 | `PGID` | unset | If set, the container process runs with this group ID instead of root. |
 
 When `PUID` and `PGID` are set, files created in mounted volumes are owned by that UID/GID. If they are not set, the container keeps the previous default behavior and runs as root.
+
+## Queue Cleanup Script
+The repo also includes a standalone generic queue cleanup script: `downloader_clean_queue.py`.
+
+`mover.py` now uses that same script when `CLEAN_QUEUE_INTERVAL_SECONDS` elapses, so the standalone script and the scheduled cleanup path share the same logic and configuration.
+
+### Queue Cleanup Configuration
+| Variable | Default | Description |
+| --- | --- | --- |
+| `DOWNLOADER_API_KEY` | `REPLACE_ME` | API key used by the shared queue cleanup logic. |
+| `DOWNLOADER_API_VERSION` | `v1` | API version used by the current provider adapter. |
+| `DOWNLOADER_QUEUE_MAX_AGE_DAYS` | `60` | Download items older than this threshold are deleted. |
+
+### Manual Queue Cleanup Test
+Install the current provider SDK into your local venv:
+
+```bash
+pip install torbox-api
+```
+
+Set `DOWNLOADER_API_KEY`, then run:
+
+```bash
+DOWNLOADER_API_KEY=your-api-key python downloader_clean_queue.py
+```
+
+Override the age threshold if needed:
+
+```bash
+DOWNLOADER_API_KEY=your-api-key DOWNLOADER_QUEUE_MAX_AGE_DAYS=10 python downloader_clean_queue.py
+```
+
+The script queries the current provider's per-type download lists, prints the number of items found per type, each deletion attempt, any skipped items with missing timestamps, and a final summary.
 
 ## Tests
 Run the unit tests locally with:

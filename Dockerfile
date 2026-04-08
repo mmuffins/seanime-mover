@@ -4,12 +4,14 @@ WORKDIR /seanime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gosu \
+    && python -m pip install --no-cache-dir torbox-api \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 seanime \
     && useradd --uid 1000 --gid 1000 --home-dir /seanime --shell /usr/sbin/nologin seanime \
     && mkdir -p /source /dest /config
 
 COPY mover.py /seanime/mover.py
+COPY downloader_clean_queue.py /seanime/downloader_clean_queue.py
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh

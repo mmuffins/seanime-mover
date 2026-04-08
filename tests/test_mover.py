@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import mover
+from downloader_clean_queue import CleanQueueStats
 from mover import READY_AGE_SECONDS, clean_queue, scan_once
 
 
@@ -141,8 +142,37 @@ def test_placeholder_is_not_moved_again(mover_env) -> None:
     assert (mover_env["dest"] / "repeat.txt").read_bytes() == b"payload"
 
 
-def test_clean_queue_prints_marker(capsys: pytest.CaptureFixture[str]) -> None:
-    clean_queue()
+def test_clean_queue_runs_downloader_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
+    logger = logging.getLogger("test_clean_queue")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
-    captured = capsys.readouterr()
-    assert captured.out == "clean_queue\n"
+    calls: list[object] = []
+
+    def fake_run_clean_queue(emit) -> CleanQueueStats:
+        calls.append(emit)
+        emit("queue cleanup message")
+        return CleanQueueStats()
+
+    monkeypatch.setattr(mover, "run_clean_queue", fake_run_clean_queue)
+
+    clean_queue(logger)
+
+    assert len(calls) == 1
+
+
+def test_clean_queue_raises_when_cleanup_reports_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    logger = logging.getLogger("test_clean_queue_failures")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    monkeypatch.setattr(
+        mover,
+        "run_clean_queue",
+        lambda emit: CleanQueueStats(failed=1),
+    )
+
+    with pytest.raises(RuntimeError, match="Queue cleanup reported 1 failure"):
+        clean_queue(logger)

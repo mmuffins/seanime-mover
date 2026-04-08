@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
+from downloader_clean_queue import run_clean_queue
+
 
 def get_env_int(name: str, default: int) -> int:
     return int(os.getenv(name, str(default)))
@@ -182,8 +184,11 @@ def scan_once(
     return stats
 
 
-def clean_queue() -> None:
-    print("clean_queue", flush=True)
+def clean_queue(logger: logging.Logger) -> None:
+    emit = logger.info
+    stats = run_clean_queue(emit=emit)
+    if stats.failed:
+        raise RuntimeError(f"Queue cleanup reported {stats.failed} failure(s)")
 
 
 def run_forever() -> None:
@@ -224,7 +229,7 @@ def run_forever() -> None:
 
         if now >= next_clean_queue_at:
             try:
-                clean_queue()
+                clean_queue(logger)
                 logger.info("Ran clean_queue")
             except Exception:
                 logger.exception("Unhandled error during clean_queue")
