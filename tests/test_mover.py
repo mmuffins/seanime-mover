@@ -7,7 +7,16 @@ from pathlib import Path
 import pytest
 
 import mover
-from mover import READY_AGE_SECONDS, clean_queue, scan_once
+from downloader_clean_queue import CleanQueueStats
+from mover import (
+    CLEAN_QUEUE_INTERVAL_SECONDS,
+    READY_AGE_SECONDS,
+    clean_queue,
+    get_next_clean_queue_at,
+    read_last_clean_queue_timestamp,
+    scan_once,
+    write_last_clean_queue_timestamp,
+)
 
 
 @pytest.fixture
@@ -141,8 +150,90 @@ def test_placeholder_is_not_moved_again(mover_env) -> None:
     assert (mover_env["dest"] / "repeat.txt").read_bytes() == b"payload"
 
 
-def test_clean_queue_prints_marker(capsys: pytest.CaptureFixture[str]) -> None:
-    clean_queue()
+def test_clean_queue_runs_downloader_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
+    logger = logging.getLogger("test_clean_queue")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
-    captured = capsys.readouterr()
-    assert captured.out == "clean_queue\n"
+    calls: list[object] = []
+
+    def fake_run_clean_queue(emit) -> CleanQueueStats:
+        calls.append(emit)
+        emit("queue cleanup message")
+        return CleanQueueStats()
+
+    monkeypatch.setattr(mover, "run_clean_queue", fake_run_clean_queue)
+
+    clean_queue(logger)
+
+    assert len(calls) == 1
+
+
+def test_clean_queue_raises_when_cleanup_reports_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    logger = logging.getLogger("test_clean_queue_failures")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    monkeypatch.setattr(
+        mover,
+        "run_clean_queue",
+        lambda emit: CleanQueueStats(failed=1),
+    )
+
+    with pytest.raises(RuntimeError, match="Queue cleanup reported 1 failure"):
+        clean_queue(logger)
+
+
+def test_read_last_clean_queue_timestamp_returns_none_for_missing_file(tmp_path: Path) -> None:
+    assert read_last_clean_queue_timestamp(tmp_path / "missing.state") is None
+
+
+def test_write_and_read_last_clean_queue_timestamp_round_trip(tmp_path: Path) -> None:
+    state_file = tmp_path / "clean_queue.state"
+
+    write_last_clean_queue_timestamp(1234.5, state_file)
+
+    assert read_last_clean_queue_timestamp(state_file) == pytest.approx(1234.5)
+
+
+def test_get_next_clean_queue_at_runs_immediately_without_state(tmp_path: Path) -> None:
+    logger = logging.getLogger("test_clean_queue_schedule_missing")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    now = 5000.0
+
+    assert get_next_clean_queue_at(now, logger, tmp_path / "missing.state") == now
+
+
+def test_get_next_clean_queue_at_uses_persisted_timestamp(tmp_path: Path) -> None:
+    logger = logging.getLogger("test_clean_queue_schedule_existing")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    state_file = tmp_path / "clean_queue.state"
+    last_run = 1000.0
+    now = last_run + 60.0
+
+    write_last_clean_queue_timestamp(last_run, state_file)
+
+    assert get_next_clean_queue_at(now, logger, state_file) == pytest.approx(
+        last_run + CLEAN_QUEUE_INTERVAL_SECONDS
+    )
+
+
+def test_get_next_clean_queue_at_runs_immediately_when_interval_elapsed(tmp_path: Path) -> None:
+    logger = logging.getLogger("test_clean_queue_schedule_due")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    state_file = tmp_path / "clean_queue.state"
+    last_run = 1000.0
+    now = last_run + CLEAN_QUEUE_INTERVAL_SECONDS + 1.0
+
+    write_last_clean_queue_timestamp(last_run, state_file)
+
+    assert get_next_clean_queue_at(now, logger, state_file) == now

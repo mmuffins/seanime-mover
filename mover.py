@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
+from downloader_clean_queue import run_clean_queue
+
 
 def get_env_int(name: str, default: int) -> int:
     return int(os.getenv(name, str(default)))
@@ -19,6 +21,7 @@ SOURCE_DIR = Path(os.getenv("SOURCE_DIR", "/source"))
 DEST_DIR = Path(os.getenv("DEST_DIR", "/dest"))
 LOG_DIR = Path(os.getenv("LOG_DIR", "/config"))
 LOG_FILE = LOG_DIR / "mover.log"
+LAST_CLEAN_QUEUE_FILE = LOG_DIR / "clean_queue.last_success"
 SCAN_INTERVAL_SECONDS = get_env_int("SCAN_INTERVAL_SECONDS", 60)
 READY_AGE_SECONDS = get_env_int("READY_AGE_SECONDS", 60)
 LOG_RETENTION_DAYS = get_env_int("LOG_RETENTION_DAYS", 30)
@@ -182,15 +185,69 @@ def scan_once(
     return stats
 
 
-def clean_queue() -> None:
-    print("clean_queue", flush=True)
+def clean_queue(logger: logging.Logger) -> None:
+    emit = logger.info
+    stats = run_clean_queue(emit=emit)
+    if stats.failed:
+        raise RuntimeError(f"Queue cleanup reported {stats.failed} failure(s)")
+
+
+def read_last_clean_queue_timestamp(
+    state_file: Path = LAST_CLEAN_QUEUE_FILE,
+    logger: logging.Logger | None = None,
+) -> float | None:
+    try:
+        raw_value = state_file.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        if logger is not None:
+            logger.exception("Failed to read clean queue state file '%s'", state_file)
+        return None
+
+    if not raw_value:
+        return None
+
+    try:
+        return float(raw_value)
+    except ValueError:
+        if logger is not None:
+            logger.warning("Ignoring invalid clean queue state in '%s'", state_file)
+        return None
+
+
+def write_last_clean_queue_timestamp(
+    timestamp: float,
+    state_file: Path = LAST_CLEAN_QUEUE_FILE,
+) -> None:
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(f"{timestamp:.6f}\n", encoding="utf-8")
+
+
+def get_next_clean_queue_at(
+    now: float,
+    logger: logging.Logger,
+    state_file: Path = LAST_CLEAN_QUEUE_FILE,
+) -> float:
+    last_successful_run = read_last_clean_queue_timestamp(state_file, logger)
+    if last_successful_run is None:
+        logger.info("No previous clean_queue state found; cleanup is due immediately")
+        return now
+
+    next_due_at = last_successful_run + CLEAN_QUEUE_INTERVAL_SECONDS
+    if next_due_at <= now:
+        logger.info("clean_queue is due immediately based on persisted state")
+        return now
+
+    return next_due_at
 
 
 def run_forever() -> None:
     logger = configure_logging()
     stop_requested = False
-    next_scan_at = time.time()
-    next_clean_queue_at = time.time() + CLEAN_QUEUE_INTERVAL_SECONDS
+    startup_time = time.time()
+    next_scan_at = startup_time
+    next_clean_queue_at = get_next_clean_queue_at(startup_time, logger)
 
     def handle_signal(signum: int, _frame: object) -> None:
         nonlocal stop_requested
@@ -224,11 +281,14 @@ def run_forever() -> None:
 
         if now >= next_clean_queue_at:
             try:
-                clean_queue()
+                clean_queue(logger)
+                successful_run_at = time.time()
+                write_last_clean_queue_timestamp(successful_run_at)
                 logger.info("Ran clean_queue")
+                next_clean_queue_at = successful_run_at + CLEAN_QUEUE_INTERVAL_SECONDS
             except Exception:
                 logger.exception("Unhandled error during clean_queue")
-            next_clean_queue_at = now + CLEAN_QUEUE_INTERVAL_SECONDS
+                next_clean_queue_at = now + CLEAN_QUEUE_INTERVAL_SECONDS
 
         if not stop_requested:
             sleep_until = min(next_scan_at, next_clean_queue_at)
