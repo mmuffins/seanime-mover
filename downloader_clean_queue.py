@@ -12,9 +12,9 @@ def get_env_int(name: str, default: int) -> int:
 
 
 DOWNLOADER_API_KEY = os.getenv("DOWNLOADER_API_KEY", "REPLACE_ME")
-DOWNLOADER_API_VERSION = os.getenv("DOWNLOADER_API_VERSION", "v1")
 DOWNLOADER_QUEUE_MAX_AGE_DAYS = get_env_int("DOWNLOADER_QUEUE_MAX_AGE_DAYS", 60)
 CURRENT_PROVIDER_BASE_URL = "https://api.torbox.app"
+DOWNLOADER_API_VERSION = "v1"
 CURRENT_PROVIDER_DOWNLOAD_TYPES = {
     "usenet": {
         "service_name": "usenet",
