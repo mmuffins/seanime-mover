@@ -27,6 +27,8 @@ The repo also includes a standalone generic queue cleanup script: `downloader_cl
 
 `mover.py` now uses that same script when `CLEAN_QUEUE_INTERVAL_SECONDS` elapses, so the standalone script and the scheduled cleanup path share the same logic and configuration.
 
+The scheduled cleanup survives container restarts. The mover stores the last successful cleanup time in `LOG_DIR/clean_queue.last_success` and uses that persisted timestamp to decide whether cleanup is already due on startup.
+
 ### Queue Cleanup Configuration
 | Variable | Default | Description |
 | --- | --- | --- |
